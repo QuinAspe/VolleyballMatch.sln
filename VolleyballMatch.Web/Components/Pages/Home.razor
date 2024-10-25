@@ -1,0 +1,404 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject IWebHostEnvironment WebHostEnvironments
+@inject MatchService MatchService
+@inject IJSRuntime JSRuntime
+<div class="d-flex justify-content-center align-items-center vh-100">
+    <div class="container text-center">
+        @if (currentMatch == null)
+        {
+            <h1>Match Pagina</h1>
+            <div class="form-group">
+                <label for="userInput">Vul de naam van de match in:</label>
+                <input type="text" id="userInput" class="form-control" @bind="matchName" placeholder="Vul de naam in..." />
+            </div>
+
+            <button class="btn btn-primary mt-2" @onclick="CreateMatch">Bevestig</button>
+        }
+        else
+        {
+            <h1>@currentMatch.Name</h1>
+            <div class="container mt-5">
+                <div class="border rounded p-4 text-center" style="border: 2px solid black; background-color: #6c757d;">
+                    <div class="row">
+                        <div class="col-5">
+                            <h4 class="font-weight-bold">Bredene</h4>
+                        </div>
+                        <div class="col-2">
+                            <h4 class="font-weight-bold">VS</h4>
+                        </div>
+                        <div class="col-5">
+                            <h4 class="font-weight-bold">Ander Team</h4>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-5">
+                            <h1 id="bredene-score" class="font-weight-bold">@bredenePoints</h1>
+                        </div>
+                        <div class="col-2">
+                            <h1 class="font-weight-bold">:</h1>
+                        </div>
+                        <div class="col-5">
+                            <h1 id="anderteam-score" class="font-weight-bold">@otherTeamPoints</h1>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-5">
+                            <h3 id="bredene-sets" class="font-weight-bold">@bredeneSets</h3>
+                        </div>
+                        <div class="col-2">
+                            <h3 class="font-weight-bold">Sets</h3>
+                        </div>
+                        <div class="col-5">
+                            <h3 id="anderteam-sets" class="font-weight-bold">@otherTeamSets</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @if (matchCompleted)
+            {
+                <h2 class="mt-5">Match is afgelopen</h2>
+            }
+            else
+            {
+                <div class="container mt-5">
+                    <div class="d-flex flex-wrap justify-content-center">
+                        <!-- Use d-flex to create a flex container -->
+                        @foreach (var eventValue in Enum.GetValues(typeof(VolleyEvent)).Cast<VolleyEvent>())
+                        {
+                            <div class="p-2">
+                                <button type="button" class="btn btn-primary" @onclick="() => OnButtonClick(eventValue)">
+                                    @GetEventName(eventValue)
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            <div class="mt-5">
+                <h2> OpslagFouten</h2>
+                <div class="container mt-5">
+                    <table class="table table-bordered table-striped">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Naam</th>
+                                <th>Set 1</th>
+                                <th>Set 2</th>
+                                <th>Set 3</th>
+                                <th>Set 4</th>
+                                <th>Set 5</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (serveFaults != null && serveFaults.Count > 0)
+                            {
+                                foreach (var serveFault in serveFaults)
+                                {
+                                    <tr>
+                                        <td>@serveFault.PlayerName</td>
+                                        <td>@serveFault.Set1Amount</td>
+                                        <td>@serveFault.Set2Amount</td>
+                                        <td>@serveFault.Set3Amount</td>
+                                        <td>@serveFault.Set4Amount</td>
+                                        <td>@serveFault.Set5Amount</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center">Nog geen opslagfouten.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+<div class="modal" tabindex="-1" role="dialog" style="display: @(isModalOpen ? "block" : "none")">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Selecteer een speler</h5>
+                <button type="button" class="close" @onclick="CloseModal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="playerName">Filter op naam:</label>
+                    <input type="text" id="playerName" class="form-control" @bind="filterText" @oninput="FilterPlayers" placeholder="Vul een naam in" />
+                </div>
+                <div class="form-group">
+                    <label for="playerDropdown">Selecteer een speler:</label>
+                    <select id="playerDropdown" class="form-control" @bind="selectedPlayerId">
+                        @if (filteredPlayers != null && filteredPlayers.Count > 0)
+                        {
+                            @foreach (var player in filteredPlayers)
+                            {
+                                <option value="@player.Id">@player.Name</option>
+                            }
+                        }
+                        else
+                        {
+                            <option value="">geen spelers gevonden</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseModal">Sluiten</button>
+                <button type="button" class="btn btn-primary" @onclick="Submit">Opslaan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private VolleyballMatch.Core.Entities.Match currentMatch { get; set; }
+    private string matchName { get; set; }
+    private VolleyEvent selectedEvent { get; set; }
+    private List<ServeFault> serveFaults = new();
+    private int bredenePoints;
+    private int otherTeamPoints;
+    private int bredeneSets;
+    private int otherTeamSets;
+    private List<Player> players;
+    private bool isModalOpen = false;
+    private bool matchCompleted = false;
+    private List<Player> filteredPlayers;
+    private string filterText = string.Empty;
+    private int? selectedPlayerId;
+    private Dictionary<VolleyEvent, string> eventNames = new()
+{
+        { VolleyEvent.AttackPoint, "Aanval" },
+        { VolleyEvent.BlockPoint, "Block" },
+        { VolleyEvent.Point, "Punt" },
+        { VolleyEvent.Ace, "Ace" },
+        { VolleyEvent.ServeFault, "OpslagFout" },
+        { VolleyEvent.Receptionfault, "Receptie Fout" },
+        { VolleyEvent.Fault, "Fout" },
+        { VolleyEvent.OpponentPoint, "Punt tegenstanders" },
+        { VolleyEvent.OpponentFault, "Fout Tegenstanders" }
+    };
+    protected override async Task OnInitializedAsync()
+    {
+        bredenePoints = 0;
+        otherTeamPoints = 0;
+        bredeneSets = 0;
+        otherTeamSets = 0;
+        var jsonFilePath = Path.Combine(WebHostEnvironments.ContentRootPath, "Json", "Player.json");
+
+        var json = await File.ReadAllTextAsync(jsonFilePath);
+
+        players = System.Text.Json.JsonSerializer.Deserialize<List<Player>>(json);
+        filteredPlayers = players;
+    }
+    private void CreateMatch()
+    {
+        var set1 = new VolleyballMatch.Core.Entities.Set { Id = 1, BredenePoints = 0, OtherTeamPoints = 0, Events = new List<PointInSetEvent>() };
+        currentMatch = new VolleyballMatch.Core.Entities.Match { Id = Guid.NewGuid(), Name = matchName, Sets = new List<VolleyballMatch.Core.Entities.Set> { set1 } };
+    }
+    private void OnButtonClick(VolleyEvent volleyEvent)
+    {
+        selectedEvent = volleyEvent;
+        if (volleyEvent != VolleyEvent.OpponentPoint && volleyEvent != VolleyEvent.OpponentFault)
+        {
+            OpenModal();
+        }
+        else if (volleyEvent != VolleyEvent.OpponentFault)
+        {
+            otherTeamPoints++;
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().OtherTeamPoints++;
+            var pointInSetEvent = new PointInSetEvent { Player = null, VolleyEvent = volleyEvent };
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            CheckSet();
+        }
+        else
+        {
+            bredenePoints++;
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().BredenePoints++;
+            var pointInSetEvent = new PointInSetEvent { Player = null, VolleyEvent = volleyEvent };
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            CheckSet();
+        }
+    }
+    private void Submit()
+    {
+        if (selectedPlayerId == null)
+        {
+            FilterPlayers2();
+            selectedPlayerId = filteredPlayers.FirstOrDefault().Id;
+        }
+        if (selectedEvent != VolleyEvent.ServeFault && selectedEvent != VolleyEvent.Receptionfault && selectedEvent != VolleyEvent.Fault)
+        {
+            bredenePoints++;
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().BredenePoints++;
+            var player = players.FirstOrDefault(p => p.Id == selectedPlayerId);
+            var pointInSetEvent = new PointInSetEvent { Player = player, VolleyEvent = selectedEvent };
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            CheckSet();
+        }
+        else if (selectedEvent != VolleyEvent.ServeFault)
+        {
+            otherTeamPoints++;
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().OtherTeamPoints++;
+            var player = players.FirstOrDefault(p => p.Id == selectedPlayerId);
+            var pointInSetEvent = new PointInSetEvent { Player = player, VolleyEvent = selectedEvent };
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            CheckSet();
+        }
+        else
+        {
+            otherTeamPoints++;
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().OtherTeamPoints++;
+            var player = players.FirstOrDefault(p => p.Id == selectedPlayerId);
+            var pointInSetEvent = new PointInSetEvent { Player = player, VolleyEvent = selectedEvent };
+            currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            //coount amount of sets in this match
+            var setAmount = currentMatch.Sets.Count;
+            //check in the servefaults if the player already has a servefault
+            var serveFault = serveFaults.FirstOrDefault(s => s.PlayerName == player.Name);
+            if (serveFault == null)
+            {
+                serveFault = new ServeFault { PlayerName = player.Name, Set1Amount = 0, Set2Amount = 0, Set3Amount = 0, Set4Amount = 0, Set5Amount = 0 };
+                if (setAmount == 1)
+                {
+                    serveFault.Set1Amount++;
+                }
+                else if (setAmount == 2)
+                {
+                    serveFault.Set2Amount++;
+                }
+                else if (setAmount == 3)
+                {
+                    serveFault.Set3Amount++;
+                }
+                else if (setAmount == 4)
+                {
+                    serveFault.Set4Amount++;
+                }
+                else if (setAmount == 5)
+                {
+                    serveFault.Set5Amount++;
+                }
+                serveFaults.Add(serveFault);
+            }
+            else
+            {
+                if (setAmount == 1)
+                {
+                    serveFault.Set1Amount++;
+                }
+                else if (setAmount == 2)
+                {
+                    serveFault.Set2Amount++;
+                }
+                else if (setAmount == 3)
+                {
+                    serveFault.Set3Amount++;
+                }
+                else if (setAmount == 4)
+                {
+                    serveFault.Set4Amount++;
+                }
+                else if (setAmount == 5)
+                {
+                    serveFault.Set5Amount++;
+                }
+            }
+            CheckSet();
+        }
+        selectedPlayerId = null;
+        CloseModal();
+    }
+
+    private string GetEventName(VolleyEvent volleyEvent)
+    {
+        return eventNames.TryGetValue(volleyEvent, out var eventName) ? eventName : volleyEvent.ToString();
+    }
+    private void CloseModal()
+    {
+        isModalOpen = false;
+        filterText = string.Empty;
+        filteredPlayers = players;
+    }
+    private void FilterPlayers(ChangeEventArgs e)
+    {
+        filterText = e.Value?.ToString() ?? string.Empty;
+
+        filteredPlayers = players
+            .Where(p => p.Name.Contains(filterText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+    private void FilterPlayers2()
+    {
+        filteredPlayers = players
+            .Where(p => p.Name.Contains(filterText, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+    private void OpenModal()
+    {
+        isModalOpen = true;
+    }
+    private void CheckSet()
+    {
+        var setAmount = currentMatch.Sets.Count;
+        if (setAmount == 5)
+        {
+            if (bredenePoints >= 15 && (bredenePoints - otherTeamPoints) >= 2)
+            {
+                bredeneSets++;
+                StopMatch();
+            }
+            else if (otherTeamPoints >= 15 && (otherTeamPoints - bredenePoints) >= 2)
+            {
+                otherTeamSets++;
+                StopMatch();
+            }
+        }
+        else
+        {
+            if (bredenePoints >= 25 && (bredenePoints - otherTeamPoints) >= 2)
+            {
+                bredeneSets++;
+                if (bredeneSets == 3)
+                {
+                    StopMatch();
+                }
+                else
+                {
+                    MakeNewSet(setAmount);
+                }
+            }
+            else if (otherTeamPoints >= 25 && (otherTeamPoints - bredenePoints) >= 2)
+            {
+                otherTeamSets++;
+                if (otherTeamSets == 3)
+                {
+                    StopMatch();
+                }
+                else
+                {
+                    MakeNewSet(setAmount);
+                }
+            }
+        }
+    }
+    private void MakeNewSet(int setAmount)
+    {
+        int newSetId = setAmount + 1;
+        var newSet = new VolleyballMatch.Core.Entities.Set { Id = newSetId, BredenePoints = 0, OtherTeamPoints = 0, Events = new List<PointInSetEvent>() };
+        currentMatch.Sets.Add(newSet);
+        bredenePoints = 0;
+        otherTeamPoints = 0;
+    }
+    private async void StopMatch()
+    {
+        matchCompleted = true;
+        await MatchService.AddMatchAsync(currentMatch);
+        await JSRuntime.InvokeVoidAsync("alert", "Match saved successfully!");
+    }
+}
