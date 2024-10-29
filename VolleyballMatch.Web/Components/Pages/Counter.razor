@@ -1,19 +1,139 @@
 ﻿@page "/counter"
 @rendermode InteractiveServer
+@inject MatchService MatchService
+@inject NavigationManager Navigation
+<h1 class="text-center my-4">Overzicht van matchen</h1>
 
-<PageTitle>Counter</PageTitle>
+<div class="container">
+    <div class="row">
+        @if (!isMatchSelected)
+        {
+            <div class="col-md-4">
+                <div class="list-group">
+                    @if (Matches != null)
+                    {
+                        @foreach (var match in Matches)
+                        {
+                            <button class="list-group-item list-group-item-action"
+                                    @onclick="() => SelectMatch(match)">
+                                @match.Name
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+        }
 
-<h1>Counter</h1>
+        @if (isMatchSelected && selectedMatch != null && firstMatchEventsByPlayer != null)
+        {
+            <div class="col-12">
+                <h2 class="text-center my-3">@selectedMatch.Name - Speler Stats</h2>
+                <div class="text-center">
+                    <button class="btn btn-primary m-3" @onclick="NavigateToWeather">Tijdlijn</button>
+                </div>
+                <div class="row">
+                    @foreach (var playerEvents in firstMatchEventsByPlayer)
+                    {
+                        <div class="col-md-6 mb-4">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-primary text-white">
+                                    <h4 class="mb-0">@playerEvents.Key</h4>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        @foreach (var groupedEvent in playerEvents.Value.GroupBy(e => e.VolleyEvent))
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                @GetEventName(groupedEvent.Key)
+                                                <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @foreach (var playerEvents in eventsEnemies)
+                    {
+                        <div class="col-md-6 mb-4">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-primary text-white">
+                                    <h4 class="mb-0">@playerEvents.Key</h4>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        @foreach (var groupedEvent in playerEvents.Value.GroupBy(e => e.VolleyEvent))
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                @GetEventName(groupedEvent.Key)
+                                                <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
 
-<p role="status">Current count: @currentCount</p>
-
-<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
+                <div class="text-center">
+                    <button class="btn btn-secondary" @onclick="DeselectMatch">Terug naar matchen</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
 
 @code {
-    private int currentCount = 0;
+    private List<Match> Matches;
+    private Match selectedMatch;
+    private bool isMatchSelected = false;
+    private Dictionary<string, List<PointInSetEvent>> firstMatchEventsByPlayer;
+    private Dictionary<string, List<PointInSetEvent>> eventsEnemies;
 
-    private void IncrementCount()
+    private Dictionary<VolleyEvent, string> eventNames = new()
+{
+        { VolleyEvent.AttackPoint, "Aanval Punten" },
+        { VolleyEvent.BlockPoint, "Block Punten" },
+        { VolleyEvent.Point, "Punten" },
+        { VolleyEvent.Ace, "Ace" },
+        { VolleyEvent.ServeFault, "Opslag Fouten" },
+        { VolleyEvent.Receptionfault, "Receptie Fouten" },
+        { VolleyEvent.Fault, "Fouten" },
+        { VolleyEvent.OpponentPoint, "Punten" },
+        { VolleyEvent.OpponentFault, "Fouten" }
+    };
+    protected override async Task OnInitializedAsync()
     {
-        currentCount++;
+        Matches = await MatchService.GetMatchesAsync();
+    }
+    private void SelectMatch(Match match)
+    {
+        selectedMatch = match;
+        isMatchSelected = true;
+        firstMatchEventsByPlayer = selectedMatch.Sets
+                                   .SelectMany(set => set.Events)
+                                   .Where(e => e.Player != null)
+                                   .GroupBy(e => e.Player.Name)
+                                   .ToDictionary(g => g.Key, g => g.ToList());
+        eventsEnemies = selectedMatch.Sets
+                            .SelectMany(set => set.Events)
+                            .Where(e => e.Player == null)
+                            .GroupBy(e => $"Tegenstanders")
+                            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+    private void DeselectMatch()
+    {
+        selectedMatch = null;
+        firstMatchEventsByPlayer = null;
+        isMatchSelected = false;
+    }
+    private string GetEventName(VolleyEvent volleyEvent)
+    {
+        return eventNames.TryGetValue(volleyEvent, out var eventName) ? eventName : volleyEvent.ToString();
+    }
+    private void NavigateToWeather()
+    {
+        Navigation.NavigateTo($"/weather/{selectedMatch.Id}");
     }
 }

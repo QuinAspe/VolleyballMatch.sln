@@ -1,64 +1,163 @@
-﻿@page "/weather"
-@attribute [StreamRendering]
-
-<PageTitle>Weather</PageTitle>
-
-<h1>Weather</h1>
-
-<p>This component demonstrates showing data.</p>
-
-@if (forecasts == null)
+﻿@page "/weather/{matchId:guid}"
+@rendermode InteractiveServer
+@inject MatchService MatchService
+@if (currentMatch != null)
 {
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Temp. (C)</th>
-                <th>Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+    <div class="container mt-4">
+        <div class="text-center">
+            <h1 class="display-4">@currentMatch.Name</h1>
+        </div>
 
+        @foreach (var set in currentMatch.Sets)
+        {
+                ResetPoints();
+            <div class="row justify-content-center">
+                <div class="col-12 col-md-8 col-lg-6">
+                    <div class="card my-4">
+                        <div class="card-header">
+                            <h2 class="h4 mb-0">Set @set.Id</h2>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                @foreach (var pointEvent in set.Events)
+                                {
+                                    <li class="list-group-item">
+                                        @if (pointEvent.Player != null)
+                                        {
+                                            @DisplayPointEventWithPlayer(pointEvent);
+                                        }
+                                        else
+                                        {
+                                            @DisplayPointEventWithoutPlayer(pointEvent);
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
 @code {
-    private WeatherForecast[]? forecasts;
+    [Parameter]
+    public Guid matchId { get; set; }
 
+    private Match currentMatch;
+    private int bredenePoints = 0;
+    private int enemyPoints = 0;
+    private Dictionary<VolleyEvent, string> eventNames = new()
+{
+        { VolleyEvent.AttackPoint, "Aanval Punt" },
+        { VolleyEvent.BlockPoint, "Block Punt" },
+        { VolleyEvent.Point, "Punt" },
+        { VolleyEvent.Ace, "Ace" },
+        { VolleyEvent.ServeFault, "Opslag Fout" },
+        { VolleyEvent.Receptionfault, "Receptie Fout" },
+        { VolleyEvent.Fault, "Fout" },
+        { VolleyEvent.OpponentPoint, "Punt" },
+        { VolleyEvent.OpponentFault, "Fout" }
+    };
     protected override async Task OnInitializedAsync()
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-        {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
+        var matches = await MatchService.GetMatchesAsync();
+        currentMatch = matches.Where(m => m.Id == matchId).FirstOrDefault();
     }
-
-    private class WeatherForecast
+    private string GetEventName(VolleyEvent volleyEvent)
     {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        return eventNames.TryGetValue(volleyEvent, out var eventName) ? eventName : volleyEvent.ToString();
+    }
+    private RenderFragment DisplayPointEventWithPlayer(PointInSetEvent pointEvent) => builder =>
+    {
+        // Local variables for this instance
+        int bPoints = bredenePoints;
+        int ePoints = enemyPoints;
+
+        // Update points based on the event type
+        if (pointEvent.VolleyEvent == VolleyEvent.Fault ||
+            pointEvent.VolleyEvent == VolleyEvent.ServeFault ||
+            pointEvent.VolleyEvent == VolleyEvent.Receptionfault)
+        {
+            ePoints++;
+            enemyPoints = ePoints;
+        }
+        else
+        {
+            bPoints++;
+            bredenePoints = bPoints;
+        }
+
+        // Render content for player point event
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "row align-items-center"); // Use a row for alignment
+
+        // Player name
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "col-4 fw-bold"); // Fixed width for player name
+        builder.AddContent(4, pointEvent.Player.Name);
+        builder.CloseElement();
+
+        // Points
+        builder.OpenElement(5, "div");
+        builder.AddAttribute(6, "class", "col-2 text-center"); // Fixed width for score
+        builder.AddContent(7, $"{bPoints} - {ePoints}");
+        builder.CloseElement();
+
+        // Event name
+        builder.OpenElement(8, "div");
+        builder.AddAttribute(9, "class", "col-6"); // Fixed width for event name
+        builder.AddContent(10, GetEventName(pointEvent.VolleyEvent));
+        builder.CloseElement();
+
+        builder.CloseElement(); // Close the row
+    };
+
+    private RenderFragment DisplayPointEventWithoutPlayer(PointInSetEvent pointEvent) => builder =>
+    {
+        // Local variables for this instance
+        int bPoints = bredenePoints;
+        int ePoints = enemyPoints;
+
+        // Update points based on the event type
+        if (pointEvent.VolleyEvent == VolleyEvent.OpponentPoint)
+        {
+            ePoints++;
+            enemyPoints = ePoints;
+        }
+        else
+        {
+            bPoints++;
+            bredenePoints = bPoints;
+        }
+
+        // Render content for opponent point event
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "row align-items-center"); // Use a row for alignment
+
+        // Opponent label
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "col-4 fw-bold"); // Fixed width for opponent label
+        builder.AddContent(4, "Tegenstander");
+        builder.CloseElement();
+
+        // Points
+        builder.OpenElement(5, "div");
+        builder.AddAttribute(6, "class", "col-2 text-center"); // Fixed width for score
+        builder.AddContent(7, $"{bPoints} - {ePoints}");
+        builder.CloseElement();
+
+        // Event name
+        builder.OpenElement(8, "div");
+        builder.AddAttribute(9, "class", "col-6"); // Fixed width for event name
+        builder.AddContent(10, GetEventName(pointEvent.VolleyEvent));
+        builder.CloseElement();
+
+        builder.CloseElement(); // Close the row
+    };
+    private void ResetPoints()
+    {
+        bredenePoints = 0;
+        enemyPoints = 0;
     }
 }

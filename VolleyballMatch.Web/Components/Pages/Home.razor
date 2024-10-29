@@ -72,6 +72,14 @@
                                 </button>
                             </div>
                         }
+                        <div class="p-2">
+                            <button type="button" class="btn btn-primary" @onclick="DeleteLatestEvent">
+                                Terug
+                            </button>
+                            <button type="button" class="btn btn-primary" @onclick="StopMatchEarly">
+                                Stop match
+                            </button>
+                        </div>
                     </div>
                 </div>
             }
@@ -400,5 +408,96 @@
         matchCompleted = true;
         await MatchService.AddMatchAsync(currentMatch);
         await JSRuntime.InvokeVoidAsync("alert", "Match saved successfully!");
+    }
+    private async void StopMatchEarly()
+    {
+        var result = await JSRuntime.InvokeAsync<bool>("confirm", "Weet je zeker dat je de match wilt stoppen?");
+        if (result)
+        {
+            StopMatch();
+        }
+    }
+    public void DeleteLatestEvent()
+    {
+        try
+        {
+
+            var latestSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
+            if (latestSet != null && !latestSet.Events.Any())
+            {
+                if(latestSet.Id != 1)
+                {
+                    currentMatch.Sets.Remove(latestSet);
+
+                    latestSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
+                }
+            }
+            var latestEvent = latestSet.Events.Last();
+            latestSet.Events.Remove(latestEvent);
+
+            if (latestEvent.VolleyEvent == VolleyEvent.OpponentPoint || latestEvent.VolleyEvent == VolleyEvent.Fault || latestEvent.VolleyEvent == VolleyEvent.Receptionfault || latestEvent.VolleyEvent == VolleyEvent.ServeFault)
+            {
+                if(otherTeamPoints == 0 && bredenePoints == 0)
+                {
+                    otherTeamSets--;
+                    otherTeamPoints = latestSet.OtherTeamPoints;
+                    bredenePoints = latestSet.BredenePoints;
+                }
+                otherTeamPoints--;
+                latestSet.OtherTeamPoints--;
+            }
+            else
+            {
+                if (otherTeamPoints == 0 && bredenePoints == 0)
+                {
+                    bredeneSets--;
+                    otherTeamPoints = latestSet.OtherTeamPoints;
+                    bredenePoints = latestSet.BredenePoints;
+                }
+                bredenePoints--;
+                latestSet.BredenePoints--;
+            }
+
+            if (latestEvent.VolleyEvent == VolleyEvent.ServeFault)
+            {
+                var player = latestEvent.Player;
+                var serveFault = serveFaults.FirstOrDefault(s => s.PlayerName == player.Name);
+                if (serveFault != null)
+                {
+                    var setAmount = latestSet.Id;
+                    if (setAmount == 1)
+                    {
+                        serveFault.Set1Amount--;
+                    }
+                    else if (setAmount == 2)
+                    {
+                        serveFault.Set2Amount--;
+                    }
+                    else if (setAmount == 3)
+                    {
+                        serveFault.Set3Amount--;
+                    }
+                    else if (setAmount == 4)
+                    {
+                        serveFault.Set4Amount--;
+                    }
+                    else if (setAmount == 5)
+                    {
+                        serveFault.Set5Amount--;
+                    }
+
+                    if (serveFault.Set1Amount == 0 && serveFault.Set2Amount == 0 && serveFault.Set3Amount == 0 && serveFault.Set4Amount == 0 && serveFault.Set5Amount == 0)
+                    {
+                        serveFaults.Remove(serveFault);
+                    }
+                }
+            }
+
+        }
+        catch
+        {
+
+        }
+
     }
 }
