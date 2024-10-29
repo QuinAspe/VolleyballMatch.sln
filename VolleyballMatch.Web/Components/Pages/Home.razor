@@ -122,6 +122,47 @@
                     </table>
                 </div>
             </div>
+            <div class="mt-5">
+                <h2>Speler Stats</h2>
+                <div class="container mt-5">
+                    <table class="table table-bordered table-striped">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Naam</th>
+                                <th>Aanval Punten</th>
+                                <th>Block Punten</th>
+                                <th>Points Punten</th>
+                                <th>Aces</th>
+                                <th>Receptie Fouten</th>
+                                <th>Fouten</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (playerLiveStats != null && playerLiveStats.Count > 0)
+                            {
+                                foreach (var stats in playerLiveStats)
+                                {
+                                    <tr>
+                                        <td>@stats.PlayerName</td>
+                                        <td>@stats.AttackPointAmount</td>
+                                        <td>@stats.BlockPointAmount</td>
+                                        <td>@stats.PointAmount</td>
+                                        <td>@stats.AceAmount</td>
+                                        <td>@stats.ReceptionfaultAmount</td>
+                                        <td>@stats.FaultAmount</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center">Geen Stats.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         }
     </div>
 </div>
@@ -169,6 +210,7 @@
     private string matchName { get; set; }
     private VolleyEvent selectedEvent { get; set; }
     private List<ServeFault> serveFaults = new();
+    private List<PlayerLiveStats> playerLiveStats = new();
     private int bredenePoints;
     private int otherTeamPoints;
     private int bredeneSets;
@@ -247,6 +289,7 @@
             var player = players.FirstOrDefault(p => p.Id == selectedPlayerId);
             var pointInSetEvent = new PointInSetEvent { Player = player, VolleyEvent = selectedEvent };
             currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            LiveStatsUpdate(pointInSetEvent);
             CheckSet();
         }
         else if (selectedEvent != VolleyEvent.ServeFault)
@@ -256,6 +299,7 @@
             var player = players.FirstOrDefault(p => p.Id == selectedPlayerId);
             var pointInSetEvent = new PointInSetEvent { Player = player, VolleyEvent = selectedEvent };
             currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().Events.Add(pointInSetEvent);
+            LiveStatsUpdate(pointInSetEvent);
             CheckSet();
         }
         else
@@ -433,8 +477,8 @@
                 }
             }
             var latestEvent = latestSet.Events.Last();
+            BackOnLiveStats(latestEvent);
             latestSet.Events.Remove(latestEvent);
-
             if (latestEvent.VolleyEvent == VolleyEvent.OpponentPoint || latestEvent.VolleyEvent == VolleyEvent.Fault || latestEvent.VolleyEvent == VolleyEvent.Receptionfault || latestEvent.VolleyEvent == VolleyEvent.ServeFault)
             {
                 if(otherTeamPoints == 0 && bredenePoints == 0)
@@ -499,5 +543,123 @@
 
         }
 
+    }
+    public void LiveStatsUpdate(PointInSetEvent pointInSetEvent)
+    {
+        var liveStatPlayer = playerLiveStats.Where(p => p.PlayerName == pointInSetEvent.Player.Name).FirstOrDefault();
+        if(liveStatPlayer == null)
+        {
+            var stat = new PlayerLiveStats { PlayerName = pointInSetEvent.Player.Name };
+            if(pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+            {
+                stat.AttackPointAmount = 1;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 1;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+            }
+            else if(pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 1;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 1;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 1;
+                stat.PointAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 1;
+            }
+            playerLiveStats.Add(stat);
+        }
+        else
+        {
+            if (pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+            {
+                liveStatPlayer.AttackPointAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
+            {
+                liveStatPlayer.FaultAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
+            {
+                liveStatPlayer.ReceptionfaultAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
+            {
+                liveStatPlayer.BlockPointAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
+            {
+                liveStatPlayer.AceAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
+            {
+                liveStatPlayer.PointAmount++;
+            }
+        }
+    }
+    public void BackOnLiveStats(PointInSetEvent pointInSetEvent)
+    {
+        var liveStatPlayer = playerLiveStats.Where(p => p.PlayerName == pointInSetEvent.Player.Name).FirstOrDefault();
+        if (pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+        {
+            liveStatPlayer.AttackPointAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
+        {
+            liveStatPlayer.FaultAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
+        {
+            liveStatPlayer.ReceptionfaultAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
+        {
+            liveStatPlayer.BlockPointAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
+        {
+            liveStatPlayer.AceAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
+        {
+            liveStatPlayer.PointAmount--;
+        }
     }
 }
