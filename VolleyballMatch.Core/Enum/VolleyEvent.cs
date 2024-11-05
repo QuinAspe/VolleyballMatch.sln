@@ -17,5 +17,7 @@ namespace VolleyballMatch.Core.Enum
         Fault,
         OpponentPoint,
         OpponentFault,
+        BlockOut,
+        SetFault
     }
 }

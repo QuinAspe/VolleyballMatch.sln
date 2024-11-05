@@ -3,7 +3,7 @@
 @inject IWebHostEnvironment WebHostEnvironments
 @inject MatchService MatchService
 @inject IJSRuntime JSRuntime
-<div class="d-flex justify-content-center align-items-center vh-100">
+<div class="d-flex justify-content-center align-items-center">
     <div class="container text-center">
         @if (currentMatch == null)
         {
@@ -131,10 +131,12 @@
                                 <th>Naam</th>
                                 <th>Aanval Punten</th>
                                 <th>Block Punten</th>
-                                <th>Points Punten</th>
+                                <th>Punten</th>
                                 <th>Aces</th>
                                 <th>Receptie Fouten</th>
                                 <th>Fouten</th>
+                                <th>Toets Fouten</th>
+                                <th>Block Out</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -150,6 +152,8 @@
                                         <td>@stats.AceAmount</td>
                                         <td>@stats.ReceptionfaultAmount</td>
                                         <td>@stats.FaultAmount</td>
+                                        <td>@stats.SetFaultAmount</td>
+                                        <td>@stats.BlockOutAmount</td>
                                     </tr>
                                 }
                             }
@@ -231,7 +235,9 @@
         { VolleyEvent.Receptionfault, "Receptie Fout" },
         { VolleyEvent.Fault, "Fout" },
         { VolleyEvent.OpponentPoint, "Punt tegenstanders" },
-        { VolleyEvent.OpponentFault, "Fout Tegenstanders" }
+        { VolleyEvent.OpponentFault, "Fout Tegenstanders" },
+        { VolleyEvent.BlockOut, "Block Out (Fout)" },
+        {VolleyEvent.SetFault, "Toets Fout" }
     };
     protected override async Task OnInitializedAsync()
     {
@@ -282,7 +288,7 @@
             FilterPlayers2();
             selectedPlayerId = filteredPlayers.FirstOrDefault().Id;
         }
-        if (selectedEvent != VolleyEvent.ServeFault && selectedEvent != VolleyEvent.Receptionfault && selectedEvent != VolleyEvent.Fault)
+        if (selectedEvent != VolleyEvent.ServeFault && selectedEvent != VolleyEvent.Receptionfault && selectedEvent != VolleyEvent.Fault && selectedEvent != VolleyEvent.SetFault && selectedEvent != VolleyEvent.BlockOut)
         {
             bredenePoints++;
             currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault().BredenePoints++;
@@ -558,6 +564,8 @@
                 stat.BlockPointAmount = 0;
                 stat.AceAmount = 0;
                 stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
             }
             else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
             {
@@ -567,6 +575,8 @@
                 stat.BlockPointAmount = 0;
                 stat.AceAmount = 0;
                 stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
             }
             else if(pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
             {
@@ -576,6 +586,8 @@
                 stat.BlockPointAmount = 0;
                 stat.AceAmount = 0;
                 stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
             }
             else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
             {
@@ -585,6 +597,8 @@
                 stat.BlockPointAmount = 1;
                 stat.AceAmount = 0;
                 stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
             }
             else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
             {
@@ -594,6 +608,8 @@
                 stat.BlockPointAmount = 0;
                 stat.AceAmount = 1;
                 stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
             }
             else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
             {
@@ -603,6 +619,30 @@
                 stat.BlockPointAmount = 0;
                 stat.AceAmount = 0;
                 stat.PointAmount = 1;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+                stat.BlockOutAmount = 1;
+                stat.SetFaultAmount = 0;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
+            {
+                stat.AttackPointAmount = 0;
+                stat.FaultAmount = 0;
+                stat.ReceptionfaultAmount = 0;
+                stat.BlockPointAmount = 0;
+                stat.AceAmount = 0;
+                stat.PointAmount = 0;
+                stat.BlockOutAmount = 0;
+                stat.SetFaultAmount = 1;
             }
             playerLiveStats.Add(stat);
         }
@@ -632,6 +672,14 @@
             {
                 liveStatPlayer.PointAmount++;
             }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
+            {
+                liveStatPlayer.BlockOutAmount++;
+            }
+            else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
+            {
+                liveStatPlayer.SetFaultAmount++;
+            }
         }
     }
     public void BackOnLiveStats(PointInSetEvent pointInSetEvent)
@@ -660,6 +708,14 @@
         else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
         {
             liveStatPlayer.PointAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
+        {
+            liveStatPlayer.BlockOutAmount--;
+        }
+        else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
+        {
+            liveStatPlayer.SetFaultAmount--;
         }
     }
 }

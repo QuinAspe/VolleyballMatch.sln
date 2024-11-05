@@ -15,5 +15,7 @@ namespace VolleyballMatch.Core.Entities
         public int AceAmount { get; set; }
         public int ReceptionfaultAmount { get; set; }
         public int FaultAmount { get; set; }
+        public int SetFaultAmount { get; set; }
+        public int BlockOutAmount { get; set; }
     }
 }

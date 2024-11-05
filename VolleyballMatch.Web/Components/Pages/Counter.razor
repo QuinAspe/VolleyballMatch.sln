@@ -45,7 +45,16 @@
                                         {
                                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 @GetEventName(groupedEvent.Key)
-                                                <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                                @if (groupedEvent.Key == VolleyEvent.Ace || groupedEvent.Key == VolleyEvent.AttackPoint || groupedEvent.Key == VolleyEvent.OpponentPoint || groupedEvent.Key == VolleyEvent.BlockPoint || groupedEvent.Key == VolleyEvent.Point)
+                                                {
+
+                                                    <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                                }
+                                                else
+                                                {
+
+                                                    <span class="badge bg-danger rounded-pill">@groupedEvent.Count() keer</span>
+                                                }
                                             </li>
                                         }
                                     </ul>
@@ -66,7 +75,16 @@
                                         {
                                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 @GetEventName(groupedEvent.Key)
-                                                <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                                @if(groupedEvent.Key == VolleyEvent.Ace || groupedEvent.Key == VolleyEvent.AttackPoint || groupedEvent.Key == VolleyEvent.OpponentPoint || groupedEvent.Key == VolleyEvent.BlockPoint || groupedEvent.Key == VolleyEvent.Point)
+                                                {
+
+                                                    <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                                }
+                                                else
+                                                {
+
+                                                    <span class="badge bg-danger rounded-pill">@groupedEvent.Count() keer</span>
+                                                }
                                             </li>
                                         }
                                     </ul>
@@ -101,7 +119,9 @@
         { VolleyEvent.Receptionfault, "Receptie Fouten" },
         { VolleyEvent.Fault, "Fouten" },
         { VolleyEvent.OpponentPoint, "Punten" },
-        { VolleyEvent.OpponentFault, "Fouten" }
+        { VolleyEvent.OpponentFault, "Fouten" },
+        {VolleyEvent.BlockOut, "Block Out" },
+        {VolleyEvent.SetFault, "Toets Fout" }
     };
     protected override async Task OnInitializedAsync()
     {

@@ -57,7 +57,9 @@
         { VolleyEvent.Receptionfault, "Receptie Fout" },
         { VolleyEvent.Fault, "Fout" },
         { VolleyEvent.OpponentPoint, "Punt" },
-        { VolleyEvent.OpponentFault, "Fout" }
+        { VolleyEvent.OpponentFault, "Fout" },
+        {VolleyEvent.BlockOut, "Block Out" },
+        {VolleyEvent.SetFault, "Toets Fout" }
     };
     protected override async Task OnInitializedAsync()
     {
@@ -77,7 +79,7 @@
         // Update points based on the event type
         if (pointEvent.VolleyEvent == VolleyEvent.Fault ||
             pointEvent.VolleyEvent == VolleyEvent.ServeFault ||
-            pointEvent.VolleyEvent == VolleyEvent.Receptionfault)
+            pointEvent.VolleyEvent == VolleyEvent.Receptionfault || pointEvent.VolleyEvent == VolleyEvent.SetFault || pointEvent.VolleyEvent == VolleyEvent.BlockOut)
         {
             ePoints++;
             enemyPoints = ePoints;
