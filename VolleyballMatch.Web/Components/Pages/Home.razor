@@ -210,16 +210,17 @@
 </div>
 
 @code {
+
     private VolleyballMatch.Core.Entities.Match currentMatch { get; set; }
-    private string matchName { get; set; }
-    private VolleyEvent selectedEvent { get; set; }
+    private string matchName;
+    private VolleyEvent selectedEvent;
     private List<ServeFault> serveFaults = new();
     private List<PlayerLiveStats> playerLiveStats = new();
-    private int bredenePoints;
-    private int otherTeamPoints;
-    private int bredeneSets;
-    private int otherTeamSets;
-    private List<Player> players;
+    private int bredenePoints = 0;
+    private int otherTeamPoints = 0;
+    private int bredeneSets = 0;
+    private int otherTeamSets = 0;
+    private List<Player> players = new();
     private bool isModalOpen = false;
     private bool matchCompleted = false;
     private List<Player> filteredPlayers;
@@ -241,10 +242,6 @@
     };
     protected override async Task OnInitializedAsync()
     {
-        bredenePoints = 0;
-        otherTeamPoints = 0;
-        bredeneSets = 0;
-        otherTeamSets = 0;
         var jsonFilePath = Path.Combine(WebHostEnvironments.ContentRootPath, "Json", "Player.json");
 
         var json = await File.ReadAllTextAsync(jsonFilePath);
@@ -254,12 +251,20 @@
     }
     private void CreateMatch()
     {
-        var set1 = new VolleyballMatch.Core.Entities.Set { Id = 1, BredenePoints = 0, OtherTeamPoints = 0, Events = new List<PointInSetEvent>() };
-        currentMatch = new VolleyballMatch.Core.Entities.Match { Id = Guid.NewGuid(), Name = matchName, Sets = new List<VolleyballMatch.Core.Entities.Set> { set1 } };
+        currentMatch = new VolleyballMatch.Core.Entities.Match
+        {
+            Id = Guid.NewGuid(),
+            Name = matchName,
+            Sets = new List<VolleyballMatch.Core.Entities.Set>
+            {
+                new VolleyballMatch.Core.Entities.Set { Id = 1, BredenePoints = 0, OtherTeamPoints = 0, Events = new List<PointInSetEvent>() }
+            }
+        };
     }
     private void OnButtonClick(VolleyEvent volleyEvent)
     {
         selectedEvent = volleyEvent;
+        var currentSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
         if (volleyEvent != VolleyEvent.OpponentPoint && volleyEvent != VolleyEvent.OpponentFault)
         {
             OpenModal();
@@ -445,6 +450,11 @@
             }
         }
     }
+    private bool IsTeamWinning(int teamPoints, int opponentPoints, bool isFifthSet)
+    {
+        int winningPoints = isFifthSet ? 15 : 25;
+        return teamPoints >= winningPoints && (teamPoints - opponentPoints) >= 2;
+    }
     private void MakeNewSet(int setAmount)
     {
         int newSetId = setAmount + 1;
@@ -473,249 +483,203 @@
         {
 
             var latestSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
-            if (latestSet != null && !latestSet.Events.Any())
+            if (latestSet == null)
+                return;
+            if (!latestSet.Events.Any() && latestSet.Id != 1)
             {
-                if(latestSet.Id != 1)
-                {
-                    currentMatch.Sets.Remove(latestSet);
-
-                    latestSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
-                }
+                currentMatch.Sets.Remove(latestSet);
+                latestSet = currentMatch.Sets.OrderByDescending(s => s.Id).FirstOrDefault();
             }
+            if (latestSet == null || !latestSet.Events.Any())
+                return;
+
             var latestEvent = latestSet.Events.Last();
             BackOnLiveStats(latestEvent);
             latestSet.Events.Remove(latestEvent);
-            if (latestEvent.VolleyEvent == VolleyEvent.OpponentPoint || latestEvent.VolleyEvent == VolleyEvent.Fault || latestEvent.VolleyEvent == VolleyEvent.Receptionfault || latestEvent.VolleyEvent == VolleyEvent.ServeFault)
-            {
-                if(otherTeamPoints == 0 && bredenePoints == 0)
-                {
-                    otherTeamSets--;
-                    otherTeamPoints = latestSet.OtherTeamPoints;
-                    bredenePoints = latestSet.BredenePoints;
-                }
-                otherTeamPoints--;
-                latestSet.OtherTeamPoints--;
-            }
-            else
-            {
-                if (otherTeamPoints == 0 && bredenePoints == 0)
-                {
-                    bredeneSets--;
-                    otherTeamPoints = latestSet.OtherTeamPoints;
-                    bredenePoints = latestSet.BredenePoints;
-                }
-                bredenePoints--;
-                latestSet.BredenePoints--;
-            }
+
+            UpdatePointsAfterEvent(latestEvent, latestSet);
 
             if (latestEvent.VolleyEvent == VolleyEvent.ServeFault)
             {
-                var player = latestEvent.Player;
-                var serveFault = serveFaults.FirstOrDefault(s => s.PlayerName == player.Name);
-                if (serveFault != null)
-                {
-                    var setAmount = latestSet.Id;
-                    if (setAmount == 1)
-                    {
-                        serveFault.Set1Amount--;
-                    }
-                    else if (setAmount == 2)
-                    {
-                        serveFault.Set2Amount--;
-                    }
-                    else if (setAmount == 3)
-                    {
-                        serveFault.Set3Amount--;
-                    }
-                    else if (setAmount == 4)
-                    {
-                        serveFault.Set4Amount--;
-                    }
-                    else if (setAmount == 5)
-                    {
-                        serveFault.Set5Amount--;
-                    }
-
-                    if (serveFault.Set1Amount == 0 && serveFault.Set2Amount == 0 && serveFault.Set3Amount == 0 && serveFault.Set4Amount == 0 && serveFault.Set5Amount == 0)
-                    {
-                        serveFaults.Remove(serveFault);
-                    }
-                }
+                HandleServeFault(latestEvent, latestSet);
             }
-
         }
-        catch
+        catch (Exception ex)
         {
-
+            Console.Error.WriteLine($"Error in DeleteLatestEvent: {ex.Message}");
         }
-
     }
-    public void LiveStatsUpdate(PointInSetEvent pointInSetEvent)
+    private void UpdatePointsAfterEvent(PointInSetEvent latestEvent, Set latestSet)
     {
-        var liveStatPlayer = playerLiveStats.Where(p => p.PlayerName == pointInSetEvent.Player.Name).FirstOrDefault();
-        if(liveStatPlayer == null)
+        if (IsOpponentEvent(latestEvent.VolleyEvent))
         {
-            var stat = new PlayerLiveStats { PlayerName = pointInSetEvent.Player.Name };
-            if(pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+            if (otherTeamPoints == 0 && bredenePoints == 0)
             {
-                stat.AttackPointAmount = 1;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
+                otherTeamSets--;
+                otherTeamPoints = latestSet.OtherTeamPoints;
+                bredenePoints = latestSet.BredenePoints;
             }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 1;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
-            }
-            else if(pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 1;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 1;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 1;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 1;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 0;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 1;
-                stat.SetFaultAmount = 0;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
-            {
-                stat.AttackPointAmount = 0;
-                stat.FaultAmount = 0;
-                stat.ReceptionfaultAmount = 0;
-                stat.BlockPointAmount = 0;
-                stat.AceAmount = 0;
-                stat.PointAmount = 0;
-                stat.BlockOutAmount = 0;
-                stat.SetFaultAmount = 1;
-            }
-            playerLiveStats.Add(stat);
+            otherTeamPoints--;
+            latestSet.OtherTeamPoints--;
         }
         else
         {
-            if (pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+            if (otherTeamPoints == 0 && bredenePoints == 0)
             {
-                liveStatPlayer.AttackPointAmount++;
+                bredeneSets--;
+                otherTeamPoints = latestSet.OtherTeamPoints;
+                bredenePoints = latestSet.BredenePoints;
             }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
-            {
-                liveStatPlayer.FaultAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
-            {
-                liveStatPlayer.ReceptionfaultAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
-            {
-                liveStatPlayer.BlockPointAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
-            {
-                liveStatPlayer.AceAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
-            {
-                liveStatPlayer.PointAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
-            {
-                liveStatPlayer.BlockOutAmount++;
-            }
-            else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
-            {
-                liveStatPlayer.SetFaultAmount++;
-            }
+            bredenePoints--;
+            latestSet.BredenePoints--;
+        }
+    }
+    private bool IsOpponentEvent(VolleyEvent volleyEvent)
+    {
+        return volleyEvent == VolleyEvent.OpponentPoint ||
+               volleyEvent == VolleyEvent.Fault ||
+               volleyEvent == VolleyEvent.Receptionfault ||
+               volleyEvent == VolleyEvent.ServeFault;
+    }
+    private void HandleServeFault(PointInSetEvent latestEvent, Set latestSet)
+    {
+        var player = latestEvent.Player;
+        var serveFault = serveFaults.FirstOrDefault(s => s.PlayerName == player.Name);
+
+        if (serveFault == null)
+            return;
+
+        int setAmount = latestSet.Id;
+        switch (setAmount)
+        {
+            case 1: serveFault.Set1Amount--; break;
+            case 2: serveFault.Set2Amount--; break;
+            case 3: serveFault.Set3Amount--; break;
+            case 4: serveFault.Set4Amount--; break;
+            case 5: serveFault.Set5Amount--; break;
+        }
+        if (serveFault.Set1Amount == 0 && serveFault.Set2Amount == 0 && serveFault.Set3Amount == 0 && serveFault.Set4Amount == 0 && serveFault.Set5Amount == 0)
+        {
+            serveFaults.Remove(serveFault);
+        }
+    }
+    public void LiveStatsUpdate(PointInSetEvent pointInSetEvent)
+    {
+        var liveStatPlayer = playerLiveStats.FirstOrDefault(p => p.PlayerName == pointInSetEvent.Player.Name);
+
+        if (liveStatPlayer == null)
+        {
+            liveStatPlayer = new PlayerLiveStats { PlayerName = pointInSetEvent.Player.Name };
+            InitializePlayerStats(liveStatPlayer, pointInSetEvent.VolleyEvent);
+            playerLiveStats.Add(liveStatPlayer);
+        }
+        else
+        {
+            UpdatePlayerStats(liveStatPlayer, pointInSetEvent.VolleyEvent);
+        }
+    }
+    private void InitializePlayerStats(PlayerLiveStats stat, VolleyEvent volleyEvent)
+    {
+        stat.AttackPointAmount = 0;
+        stat.FaultAmount = 0;
+        stat.ReceptionfaultAmount = 0;
+        stat.BlockPointAmount = 0;
+        stat.AceAmount = 0;
+        stat.PointAmount = 0;
+        stat.BlockOutAmount = 0;
+        stat.SetFaultAmount = 0;
+
+        switch (volleyEvent)
+        {
+            case VolleyEvent.AttackPoint:
+                stat.AttackPointAmount = 1;
+                break;
+            case VolleyEvent.Fault:
+                stat.FaultAmount = 1;
+                break;
+            case VolleyEvent.Receptionfault:
+                stat.ReceptionfaultAmount = 1;
+                break;
+            case VolleyEvent.BlockPoint:
+                stat.BlockPointAmount = 1;
+                break;
+            case VolleyEvent.Ace:
+                stat.AceAmount = 1;
+                break;
+            case VolleyEvent.Point:
+                stat.PointAmount = 1;
+                break;
+            case VolleyEvent.BlockOut:
+                stat.BlockOutAmount = 1;
+                break;
+            case VolleyEvent.SetFault:
+                stat.SetFaultAmount = 1;
+                break;
+        }
+    }
+    private void UpdatePlayerStats(PlayerLiveStats stat, VolleyEvent volleyEvent)
+    {
+        switch (volleyEvent)
+        {
+            case VolleyEvent.AttackPoint:
+                stat.AttackPointAmount++;
+                break;
+            case VolleyEvent.Fault:
+                stat.FaultAmount++;
+                break;
+            case VolleyEvent.Receptionfault:
+                stat.ReceptionfaultAmount++;
+                break;
+            case VolleyEvent.BlockPoint:
+                stat.BlockPointAmount++;
+                break;
+            case VolleyEvent.Ace:
+                stat.AceAmount++;
+                break;
+            case VolleyEvent.Point:
+                stat.PointAmount++;
+                break;
+            case VolleyEvent.BlockOut:
+                stat.BlockOutAmount++;
+                break;
+            case VolleyEvent.SetFault:
+                stat.SetFaultAmount++;
+                break;
         }
     }
     public void BackOnLiveStats(PointInSetEvent pointInSetEvent)
     {
-        var liveStatPlayer = playerLiveStats.Where(p => p.PlayerName == pointInSetEvent.Player.Name).FirstOrDefault();
-        if (pointInSetEvent.VolleyEvent == VolleyEvent.AttackPoint)
+        var liveStatPlayer = playerLiveStats.FirstOrDefault(p => p.PlayerName == pointInSetEvent.Player?.Name);
+
+        if (liveStatPlayer != null)
         {
-            liveStatPlayer.AttackPointAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Fault)
-        {
-            liveStatPlayer.FaultAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Receptionfault)
-        {
-            liveStatPlayer.ReceptionfaultAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockPoint)
-        {
-            liveStatPlayer.BlockPointAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Ace)
-        {
-            liveStatPlayer.AceAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.Point)
-        {
-            liveStatPlayer.PointAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.BlockOut)
-        {
-            liveStatPlayer.BlockOutAmount--;
-        }
-        else if (pointInSetEvent.VolleyEvent == VolleyEvent.SetFault)
-        {
-            liveStatPlayer.SetFaultAmount--;
+            switch (pointInSetEvent.VolleyEvent)
+            {
+                case VolleyEvent.AttackPoint:
+                    liveStatPlayer.AttackPointAmount--;
+                    break;
+                case VolleyEvent.Fault:
+                    liveStatPlayer.FaultAmount--;
+                    break;
+                case VolleyEvent.Receptionfault:
+                    liveStatPlayer.ReceptionfaultAmount--;
+                    break;
+                case VolleyEvent.BlockPoint:
+                    liveStatPlayer.BlockPointAmount--;
+                    break;
+                case VolleyEvent.Ace:
+                    liveStatPlayer.AceAmount--;
+                    break;
+                case VolleyEvent.Point:
+                    liveStatPlayer.PointAmount--;
+                    break;
+                case VolleyEvent.BlockOut:
+                    liveStatPlayer.BlockOutAmount--;
+                    break;
+                case VolleyEvent.SetFault:
+                    liveStatPlayer.SetFaultAmount--;
+                    break;
+            }
         }
     }
 }

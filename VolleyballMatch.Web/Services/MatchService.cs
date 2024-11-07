@@ -21,7 +21,9 @@ namespace VolleyballMatch.Web.Services
 
             using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
-                return await JsonSerializer.DeserializeAsync<List<Match>>(stream) ?? new List<Match>();
+                List<Match> matches = await JsonSerializer.DeserializeAsync<List<Match>>(stream) ?? new List<Match>();
+                matches.RemoveAll(m => m.Name == "test");
+                return matches;
             }
         }
 
