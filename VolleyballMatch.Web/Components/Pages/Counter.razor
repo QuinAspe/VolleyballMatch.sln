@@ -41,20 +41,37 @@
                                 </div>
                                 <div class="card-body">
                                     <ul class="list-group list-group-flush">
-                                        @foreach (var groupedEvent in playerEvents.Value.GroupBy(e => e.VolleyEvent))
+                                        @{
+                                            var ifEvents = playerEvents.Value.GroupBy(e => e.VolleyEvent)
+                                                         .Where(group => group.Key == VolleyEvent.Ace ||
+                                                                         group.Key == VolleyEvent.AttackPoint ||
+                                                                         group.Key == VolleyEvent.OpponentPoint ||
+                                                                         group.Key == VolleyEvent.BlockPoint ||
+                                                                         group.Key == VolleyEvent.Point);
+
+                                            var elseEvents = playerEvents.Value.GroupBy(e => e.VolleyEvent)
+                                                         .Where(group => !(group.Key == VolleyEvent.Ace ||
+                                                                           group.Key == VolleyEvent.AttackPoint ||
+                                                                           group.Key == VolleyEvent.OpponentPoint ||
+                                                                           group.Key == VolleyEvent.BlockPoint ||
+                                                                           group.Key == VolleyEvent.Point));
+                                        }
+
+                                        <!-- Render 'if' grouped events -->
+                                        @foreach (var groupedEvent in ifEvents)
                                         {
                                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 @GetEventName(groupedEvent.Key)
-                                                @if (groupedEvent.Key == VolleyEvent.Ace || groupedEvent.Key == VolleyEvent.AttackPoint || groupedEvent.Key == VolleyEvent.OpponentPoint || groupedEvent.Key == VolleyEvent.BlockPoint || groupedEvent.Key == VolleyEvent.Point)
-                                                {
+                                                <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
+                                            </li>
+                                        }
 
-                                                    <span class="badge bg-info rounded-pill">@groupedEvent.Count() keer</span>
-                                                }
-                                                else
-                                                {
-
-                                                    <span class="badge bg-danger rounded-pill">@groupedEvent.Count() keer</span>
-                                                }
+                                        <!-- Render 'else' grouped events -->
+                                        @foreach (var groupedEvent in elseEvents)
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                @GetEventName(groupedEvent.Key)
+                                                <span class="badge bg-danger rounded-pill">@groupedEvent.Count() keer</span>
                                             </li>
                                         }
                                     </ul>
@@ -120,8 +137,8 @@
         { VolleyEvent.Fault, "Fouten" },
         { VolleyEvent.OpponentPoint, "Punten" },
         { VolleyEvent.OpponentFault, "Fouten" },
-        {VolleyEvent.BlockOut, "Block Out" },
-        {VolleyEvent.SetFault, "Toets Fout" }
+        {VolleyEvent.BlockOut, "Block Out (Fout)" },
+        {VolleyEvent.SetFault, "Toetsfout" }
     };
     protected override async Task OnInitializedAsync()
     {
